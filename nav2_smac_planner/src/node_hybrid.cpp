@@ -34,14 +34,14 @@ namespace nav2_smac_planner
 {
 
 // defining static member for all instance to share
-LookupTable NodeHybrid::obstacle_heuristic_lookup_table;
-double NodeHybrid::travel_distance_cost = sqrt(2);
-HybridMotionTable NodeHybrid::motion_table;
-float NodeHybrid::size_lookup = 25;
-LookupTable NodeHybrid::dist_heuristic_lookup_table;
-nav2_costmap_2d::Costmap2D * NodeHybrid::sampled_costmap = nullptr;
-CostmapDownsampler NodeHybrid::downsampler;
-ObstacleHeuristicQueue NodeHybrid::obstacle_heuristic_queue;
+LookupTable NodeHybrid::obstacle_heuristic_lookup_table; //障碍物启发值查找表
+double NodeHybrid::travel_distance_cost = sqrt(2);  //对角移动代价
+HybridMotionTable NodeHybrid::motion_table;  //运动基元表
+float NodeHybrid::size_lookup = 25;       //查找表尺寸（m）
+LookupTable NodeHybrid::dist_heuristic_lookup_table; // 距离启发值查找表
+nav2_costmap_2d::Costmap2D * NodeHybrid::sampled_costmap = nullptr; // 下采样代价地图
+CostmapDownsampler NodeHybrid::downsampler; //代价地图下采样器 
+ObstacleHeuristicQueue NodeHybrid::obstacle_heuristic_queue; // 障碍物启发值计算队列
 
 // Each of these tables are the projected motion models through
 // time and space applied to the search on the current node in

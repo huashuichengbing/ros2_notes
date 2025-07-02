@@ -228,6 +228,7 @@ bool AStarAlgorithm<NodeT>::createPath(
   _best_heuristic_node = {std::numeric_limits<float>::max(), 0};
   clearQueue();
 
+  //确保
   if (!areInputsValid()) {
     return false;
   }
