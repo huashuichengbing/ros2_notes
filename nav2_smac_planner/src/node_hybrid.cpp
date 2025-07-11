@@ -59,18 +59,18 @@ void HybridMotionTable::initDubin(
   SearchInfo & search_info)
 {
   size_x = size_x_in;
-  change_penalty = search_info.change_penalty;
-  non_straight_penalty = search_info.non_straight_penalty;
-  cost_penalty = search_info.cost_penalty;
-  reverse_penalty = search_info.reverse_penalty;
-  travel_distance_reward = 1.0f - search_info.retrospective_penalty;
+  change_penalty = search_info.change_penalty;//方向改变惩罚
+  non_straight_penalty = search_info.non_straight_penalty;//非直线惩罚
+  cost_penalty = search_info.cost_penalty;//代价惩罚
+  reverse_penalty = search_info.reverse_penalty;//倒车惩罚
+  travel_distance_reward = 1.0f - search_info.retrospective_penalty;//行进奖励
 
   // if nothing changed, no need to re-compute primitives
   if (num_angle_quantization_in == num_angle_quantization &&
     min_turning_radius == search_info.minimum_turning_radius &&
     motion_model == MotionModel::DUBIN)
   {
-    return;
+    return;//参数未变化时跳过重新计算
   }
 
   num_angle_quantization = num_angle_quantization_in;
@@ -83,14 +83,17 @@ void HybridMotionTable::initDubin(
   // 2) chord length must be greater than sqrt(2) to leave current cell
   // 3) maximum curvature must be respected, represented by minimum turning angle
   // Thusly:
-  // On circle of radius minimum turning angle, we need select motion primatives
-  // with chord length > sqrt(2) and be an increment of our bin size
-  //
+//在半径最小转弯角度的圆上，我们需要选择运动素数
+//弦长>sqrt（2），并且是我们的bin大小的增量
+//
   // chord >= sqrt(2) >= 2 * R * sin (angle / 2); where angle / N = quantized bin size
   // Thusly: angle <= 2.0 * asin(sqrt(2) / (2 * R))
+  //最小转弯半径R->计算最大转向角->角度量化对齐 ->计算位移增量
+  // 计算最大理论转向角（满足弦长>√2）
   float angle = 2.0 * asin(sqrt(2.0) / (2 * min_turning_radius));
   // Now make sure angle is an increment of the quantized bin size
   // And since its based on the minimum chord, we need to make sure its always larger
+  // 对齐到角度量化bin
   bin_size =
     2.0f * static_cast<float>(M_PI) / static_cast<float>(num_angle_quantization);
   float increments;
@@ -106,6 +109,7 @@ void HybridMotionTable::initDubin(
   // find deflections
   // If we make a right triangle out of the chord in circle of radius
   // min turning angle, we can see that delta X = R * sin (angle)
+  //计算位移增量
   float delta_x = min_turning_radius * sin(angle);
   // Using that same right triangle, we can see that the complement
   // to delta Y is R * cos (angle). If we subtract R, we get the actual value
@@ -113,14 +117,17 @@ void HybridMotionTable::initDubin(
 
   projections.clear();
   projections.reserve(3);
+  //运动基元生成
   projections.emplace_back(hypotf(delta_x, delta_y), 0.0, 0.0);  // Forward
   projections.emplace_back(delta_x, delta_y, increments);  // Left
   projections.emplace_back(delta_x, -delta_y, -increments);  // Right
 
   // Create the correct OMPL state space
+  // 使用OMPL库的Dubin模型 为后续分析扩展（analytic expansion）提供支持
   state_space = std::make_unique<ompl::base::DubinsStateSpace>(min_turning_radius);
 
-  // Precompute projection deltas
+  // Precompute projection deltas 预计算投影增量
+  //提前计算所有可能得方向变化结果，运行时直接查表避免实时三角函数计算
   delta_xs.resize(projections.size());
   delta_ys.resize(projections.size());
   trig_values.resize(num_angle_quantization);
@@ -155,7 +162,7 @@ void HybridMotionTable::initReedsShepp(
   change_penalty = search_info.change_penalty;
   non_straight_penalty = search_info.non_straight_penalty;
   cost_penalty = search_info.cost_penalty;
-  reverse_penalty = search_info.reverse_penalty;
+  reverse_penalty = search_info.reverse_penalty; //倒车惩罚系数 通过调整惩罚值控制倒车频率（典型值2.0-5.0）
   travel_distance_reward = 1.0f - search_info.retrospective_penalty;
 
   // if nothing changed, no need to re-compute primitives
@@ -187,6 +194,7 @@ void HybridMotionTable::initReedsShepp(
 
   projections.clear();
   projections.reserve(6);
+  //6种运动基元
   projections.emplace_back(hypotf(delta_x, delta_y), 0.0, 0.0);  // Forward
   projections.emplace_back(delta_x, delta_y, increments);  // Forward + Left
   projections.emplace_back(delta_x, -delta_y, -increments);  // Forward + Right
@@ -345,7 +353,7 @@ float NodeHybrid::getHeuristicCost(
   const Coordinates & node_coords,
   const Coordinates & goal_coords,
   const nav2_costmap_2d::Costmap2D * /*costmap*/)
-{
+{  //障碍物启发  距离启发 算法会在 "快速接近目标" 和 "安全绕障" 之间自动权衡
   const float obstacle_heuristic =
     getObstacleHeuristic(node_coords, goal_coords, motion_table.cost_penalty);
   const float dist_heuristic = getDistanceHeuristic(node_coords, goal_coords, obstacle_heuristic);

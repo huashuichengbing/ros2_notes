@@ -233,7 +233,7 @@ bool AStarAlgorithm<NodeT>::createPath(
     return false;
   }
 
-  // 0) Add starting point to the open set
+  // 0) Add starting point to the open set //起点加入开放集
   addNode(0.0, getStart());
   getStart()->setAccumulatedCost(0.0);
 
@@ -263,6 +263,7 @@ bool AStarAlgorithm<NodeT>::createPath(
 
   while (iterations < getMaxIterations() && !_queue.empty()) {
     // Check for planning timeout only on every Nth iteration
+    // 仅在每N次迭代时检查计划超时
     if (iterations % _timing_interval == 0) {
       std::chrono::duration<double> planning_duration =
         std::chrono::duration_cast<std::chrono::duration<double>>(steady_clock::now() - start_time);
@@ -287,6 +288,7 @@ bool AStarAlgorithm<NodeT>::createPath(
 
     // 2.1) Use an analytic expansion (if available) to generate a path
     expansion_result = nullptr;
+    //当接近目标时，g(n)/H(n) > ratio 调用Reeds-Shepp/Dubin生成精确路径段 减少30-50%搜索节点
     expansion_result = _expander->tryAnalyticExpansion(
       current_node, getGoal(), neighborGetter, analytic_iterations, closest_distance);
     if (expansion_result != nullptr) {
@@ -294,11 +296,12 @@ bool AStarAlgorithm<NodeT>::createPath(
     }
 
     // 3) Check if we're at the goal, backtrace if required
-    if (isGoal(current_node)) {
+    //双终止条件
+    if (isGoal(current_node)) { //精准终止
       return current_node->backtracePath(path);
     } else if (_best_heuristic_node.first < getToleranceHeuristic()) {
       // Optimization: Let us find when in tolerance and refine within reason
-      approach_iterations++;
+      approach_iterations++;  //容忍终止
       if (approach_iterations >= getOnApproachMaxIterations()) {
         return _graph.at(_best_heuristic_node.second).backtracePath(path);
       }
@@ -306,6 +309,7 @@ bool AStarAlgorithm<NodeT>::createPath(
 
     // 4) Expand neighbors of Nbest not visited
     neighbors.clear();
+    //基于当前节点的状态 (x, y, θ)，生成所有可能的 运动基元（Motion Primitives），并筛选出 无碰撞、符合运动学约束 的邻居节点
     current_node->getNeighbors(neighborGetter, _collision_checker, _traverse_unknown, neighbors);
 
     for (neighbor_iterator = neighbors.begin();
@@ -321,12 +325,14 @@ bool AStarAlgorithm<NodeT>::createPath(
         neighbor->setAccumulatedCost(g_cost);
         neighbor->parent = current_node;
 
-        // 4.3) Add to queue with heuristic cost
+        // 4.3) Add to queue with heuristic cost  //加入开放集
         addNode(g_cost + getHeuristicCost(neighbor), neighbor);
       }
     }
   }
-
+  
+  //容错终止条件解析
+  //最小的启发式值 h(n)（到目标的估计代价） < 容忍阈值（通常为 _tolerance / costmap_resolution，默认约 5 网格单元）
   if (_best_heuristic_node.first < getToleranceHeuristic()) {
     // If we run out of serach options, return the path that is closest, if within tolerance.
     return _graph.at(_best_heuristic_node.second).backtracePath(path);
@@ -373,11 +379,13 @@ void AStarAlgorithm<NodeT>::addNode(const float & cost, NodePtr & node)
 template<typename NodeT>
 float AStarAlgorithm<NodeT>::getHeuristicCost(const NodePtr & node)
 {
+  //将一维节点索引转换为三维坐标 (x, y, θ)
   const Coordinates node_coords =
-    NodeT::getCoords(node->getIndex(), getSizeX(), getSizeDim3());
+    NodeT::getCoords(node->getIndex(), getSizeX(), getSizeDim3()); //节点坐标转换
   float heuristic = NodeT::getHeuristicCost(
-    node_coords, _goal_coordinates, _costmap);
+    node_coords, _goal_coordinates, _costmap); //启发式计算
 
+  //更新最佳启发式节点
   if (heuristic < _best_heuristic_node.first) {
     _best_heuristic_node = {heuristic, node->getIndex()};
   }

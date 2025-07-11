@@ -55,6 +55,7 @@ bool Smoother::smooth(
   bool success = true, reversing_segment;
   nav_msgs::msg::Path curr_path_segment;
   curr_path_segment.header = path.header;
+  //将路径按运动方向分段
   std::vector<PathSegment> path_segments = findDirectionalPathSegments(path);
 
   for (unsigned int i = 0; i != path_segments.size(); i++) {
@@ -67,6 +68,7 @@ bool Smoother::smooth(
         std::back_inserter(curr_path_segment.poses));
 
       // Make sure we're still able to smooth with time remaining
+      //时间预算管理 每段平滑前检查剩余时间 超时立即终止（返回部分优化结果）
       steady_clock::time_point now = steady_clock::now();
       time_remaining = max_time - duration_cast<duration<double>>(now - start).count();
       refinement_ctr_ = 0;
@@ -74,11 +76,13 @@ bool Smoother::smooth(
       // Smooth path segment naively
       const geometry_msgs::msg::Pose start_pose = curr_path_segment.poses.front().pose;
       const geometry_msgs::msg::Pose goal_pose = curr_path_segment.poses.back().pose;
+      //梯度下降：迭代调整路径点位置，最小化目标函数   共轭梯度法：更高阶优化（需更多计算资源）
       bool local_success =
         smoothImpl(curr_path_segment, reversing_segment, costmap, time_remaining);
       success = success && local_success;
 
       // Enforce boundary conditions
+      // 非完整约束处理：保持起点/终点的位姿（位置+朝向）不变  确保平滑后路径仍满足机器人运动学
       if (!is_holonomic_ && local_success) {
         enforceStartBoundaryConditions(start_pose, curr_path_segment, costmap, reversing_segment);
         enforceEndBoundaryConditions(goal_pose, curr_path_segment, costmap, reversing_segment);
@@ -95,6 +99,7 @@ bool Smoother::smooth(
   return success;
 }
 
+//基于梯度下降的路径平滑算法
 bool Smoother::smoothImpl(
   nav_msgs::msg::Path & path,
   bool & reversing_segment,
@@ -141,13 +146,15 @@ bool Smoother::smoothImpl(
 
     for (unsigned int i = 1; i != path_size - 1; i++) {
       for (unsigned int j = 0; j != 2; j++) {
+        //j=0 处理x坐标 
         x_i = getFieldByDim(path.poses[i], j);
         y_i = getFieldByDim(new_path.poses[i], j);
-        y_m1 = getFieldByDim(new_path.poses[i - 1], j);
-        y_ip1 = getFieldByDim(new_path.poses[i + 1], j);
+        y_m1 = getFieldByDim(new_path.poses[i - 1], j); //前驱点
+        y_ip1 = getFieldByDim(new_path.poses[i + 1], j);//后继点
         y_i_org = y_i;
 
         // Smooth based on local 3 point neighborhood and original data locations
+        //计算数据保真项+平滑项 黄金比例建议：smooth_w_ / data_w_ ≈ 1.25 （如 0.5/0.4）平衡平滑性与保真度
         y_i += data_w_ * (x_i - y_i) + smooth_w_ * (y_ip1 + y_m1 - (2.0 * y_i));
         setFieldByDim(new_path.poses[i], j, y_i);
         change += abs(y_i - y_i_org);

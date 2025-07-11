@@ -81,7 +81,7 @@ nav2_costmap_2d::Costmap2D * CostmapDownsampler::downsample(
   const unsigned int & downsampling_factor)
 {
   _downsampling_factor = downsampling_factor;
-  updateCostmapSize();
+  updateCostmapSize(); //尺寸计算与内存管理
 
   // Adjust costmap size if needed
   if (_downsampled_costmap->getSizeInCellsX() != _downsampled_size_x ||
@@ -91,7 +91,7 @@ nav2_costmap_2d::Costmap2D * CostmapDownsampler::downsample(
     resizeCostmap();
   }
 
-  // Assign costs
+  // Assign costs // 关键降采样操作
   for (unsigned int i = 0; i < _downsampled_size_x; ++i) {
     for (unsigned int j = 0; j < _downsampled_size_y; ++j) {
       setCostOfCell(i, j);
